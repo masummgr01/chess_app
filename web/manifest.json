@@ -1,11 +1,11 @@
 {
-    "name": "chesss_game",
-    "short_name": "chesss_game",
+    "name": "Chess App",
+    "short_name": "ChessApp",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A professional Chess application with biometric authentication.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
