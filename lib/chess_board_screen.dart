@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
 import 'login_screen.dart';
+import 'call_service.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 
 // ---------- Data models ----------
 
@@ -60,6 +62,12 @@ class _ChessBoardScreenState extends State<ChessBoardScreen> {
   final _auth = AuthService();
   String? _username;
 
+  // Call variables
+  final _callService = CallService();
+  bool _isInCall = false;
+  int? _remoteUid;
+  bool _localUserJoined = false;
+
   @override
   void initState() {
     super.initState();
@@ -67,9 +75,60 @@ class _ChessBoardScreenState extends State<ChessBoardScreen> {
     _loadUsername();
   }
 
+  @override
+  void dispose() {
+    _callService.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadUsername() async {
     final name = await _auth.getUsername();
     if (mounted) setState(() => _username = name);
+  }
+
+  Future<void> _toggleCall() async {
+    if (_isInCall) {
+      await _callService.leaveChannel();
+      setState(() {
+        _isInCall = false;
+        _remoteUid = null;
+        _localUserJoined = false;
+      });
+    } else {
+      setState(() => _isInCall = true);
+      try {
+        await _callService.init();
+        
+        // Listen for events
+        _callService.engine.registerEventHandler(
+          RtcEngineEventHandler(
+            onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+              debugPrint("Local user ${connection.localUid} joined");
+              setState(() => _localUserJoined = true);
+            },
+            onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+              debugPrint("Remote user $remoteUid joined");
+              setState(() => _remoteUid = remoteUid);
+            },
+            onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+              debugPrint("Remote user $remoteUid left");
+              setState(() => _remoteUid = null);
+            },
+          ),
+        );
+
+        // Join a fixed channel for demo. In a real app, use the Match ID.
+        await _callService.joinChannel("chess_match_123", 0);
+      } catch (e) {
+        debugPrint("Error joining call: $e");
+        setState(() => _isInCall = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to start call. Check Agora App ID.")),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _logout() async {
@@ -276,12 +335,84 @@ class _ChessBoardScreenState extends State<ChessBoardScreen> {
     });
   }
 
+  Widget _buildVideoCallOverlays() {
+    if (!_isInCall) return const SizedBox.shrink();
+
+    return Stack(
+      children: [
+        // Opponent Video (Remote) - Small window top right
+        if (_remoteUid != null)
+          Positioned(
+            top: 10,
+            right: 10,
+            width: 120,
+            height: 160,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: AgoraVideoView(
+                  controller: VideoViewController.remote(
+                    rtcEngine: _callService.engine,
+                    canvas: VideoCanvas(uid: _remoteUid),
+                    connection: const RtcConnection(channelId: "chess_match_123"),
+                  ),
+                ),
+              ),
+            ),
+          )
+        else if (_localUserJoined)
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              color: Colors.black54,
+              child: const Text("Waiting for opponent...", style: TextStyle(color: Colors.white, fontSize: 10)),
+            ),
+          ),
+
+        // Your Video (Local) - Small window bottom right
+        if (_localUserJoined)
+          Positioned(
+            bottom: 10,
+            right: 10,
+            width: 100,
+            height: 140,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.brown, width: 2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: AgoraVideoView(
+                  controller: VideoViewController(
+                    rtcEngine: _callService.engine,
+                    canvas: const VideoCanvas(uid: 0),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Basic Chess'),
         actions: [
+          IconButton(
+            icon: Icon(_isInCall ? Icons.videocam_off : Icons.videocam, color: _isInCall ? Colors.red : null),
+            onPressed: _toggleCall,
+            tooltip: _isInCall ? 'End Video Call' : 'Start Video Call',
+          ),
           if (_username != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -296,64 +427,69 @@ class _ChessBoardScreenState extends State<ChessBoardScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Text(
-              statusMessage,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: GridView.builder(
-                  padding: EdgeInsets.zero,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8),
-                  itemCount: 64,
-                  itemBuilder: (context, index) {
-                    final row = index ~/ 8;
-                    final col = index % 8;
-                    final isLight = (row + col) % 2 == 0;
-                    final piece = board[row][col];
-                    final pos = Position(row, col);
-                    final isSelected = selectedPosition == pos;
-                    final isValidMove = validMoves.contains(pos);
-
-                    return GestureDetector(
-                      onTap: () => _onSquareTap(row, col),
-                      child: Container(
-                        color: isSelected
-                            ? Colors.yellow[600]
-                            : isValidMove
-                            ? Colors.green[300]
-                            : (isLight
-                            ? const Color(0xFFEEEED2)
-                            : const Color(0xFF769656)),
-                        child: Center(
-                          child: piece != null
-                              ? Text(piece.symbol, style: const TextStyle(fontSize: 32))
-                              : null,
-                        ),
-                      ),
-                    );
-                  },
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Text(
+                  statusMessage,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
                 ),
               ),
-            ),
+              Expanded(
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: GridView.builder(
+                      padding: EdgeInsets.zero,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8),
+                      itemCount: 64,
+                      itemBuilder: (context, index) {
+                        final row = index ~/ 8;
+                        final col = index % 8;
+                        final isLight = (row + col) % 2 == 0;
+                        final piece = board[row][col];
+                        final pos = Position(row, col);
+                        final isSelected = selectedPosition == pos;
+                        final isValidMove = validMoves.contains(pos);
+
+                        return GestureDetector(
+                          onTap: () => _onSquareTap(row, col),
+                          child: Container(
+                            color: isSelected
+                                ? Colors.yellow[600]
+                                : isValidMove
+                                ? Colors.green[300]
+                                : (isLight
+                                ? const Color(0xFFEEEED2)
+                                : const Color(0xFF769656)),
+                            child: Center(
+                              child: piece != null
+                                  ? Text(piece.symbol, style: const TextStyle(fontSize: 32))
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: ElevatedButton(
+                  onPressed: _restart,
+                  child: const Text('Restart Game'),
+                ),
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: ElevatedButton(
-              onPressed: _restart,
-              child: const Text('Restart Game'),
-            ),
-          ),
+          _buildVideoCallOverlays(),
         ],
       ),
     );
