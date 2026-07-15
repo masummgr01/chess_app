@@ -6,10 +6,11 @@ plugins {
 
 android {
     namespace = "com.example.chess_app"
-    compileSdk = flutter.compileSdkVersion
+    // Set to 36 as explicitly required by the latest biometric and lifecycle plugins
+    compileSdk = 36
     
-    // Pin NDK to 26b to fix Agora RTC engine linker errors with NDK 27+
-    ndkVersion = "27.0.12077973"
+    // NDK version updated to the highest required version
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -22,18 +23,26 @@ android {
 
     defaultConfig {
         applicationId = "com.example.chess_app"
-        // local_auth and flutter_secure_storage require at least 21
+        // minSdk 21 is required for local_auth and Agora
         minSdk = flutter.minSdkVersion 
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        multiDexEnabled = true
+        
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                // Forcing the use of the shared C++ library to resolve linker errors in Agora and other native plugins.
+                arguments("-DANDROID_STL=c++_shared")
+            }
+        }
     }
 
     buildTypes {
         getByName("release") {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             isShrinkResources = false
@@ -52,6 +61,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.multidex:multidex:2.0.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.fragment:fragment:1.6.2")
 }

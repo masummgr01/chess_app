@@ -25,4 +25,4 @@ ENV PORT=7860
 EXPOSE 7860
 
 # Start the server (manage.py is now in /app/)
-CMD ["python", "manage.py", "runserver", "0.0.0.0:7860"]
+CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:10000"]

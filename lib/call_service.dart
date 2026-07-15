@@ -1,5 +1,6 @@
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
 
 class CallService {
   // TODO: Replace with your actual Agora App ID from console.agora.io
@@ -23,6 +24,12 @@ class CallService {
       throw Exception("Microphone and Camera permissions are required for video calls.");
     }
 
+    // Check Bluetooth Connect permission for Android 12+ (API 31+)
+    if (statuses[Permission.bluetoothConnect] != PermissionStatus.granted) {
+      debugPrint("Warning: BluetoothConnect permission not granted. Call audio might not route to headsets.");
+    }
+
+    debugPrint("Initializing Agora RTC engine...");
     if (_engine == null) {
       _engine = createAgoraRtcEngine();
       await _engine!.initialize(const RtcEngineContext(
