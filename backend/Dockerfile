@@ -20,9 +20,6 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Use 7860 for Hugging Face or similar services
-ENV PORT=7860
-EXPOSE 7860
-
-# Start the server (manage.py is now in /app/)
-CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:10000"]
+# ... existing setup ...
+ENV PORT=10000
+EXPOSE 10000CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:10000"]

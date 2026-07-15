@@ -19,8 +19,14 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from api import views
+from django.http import JsonResponse
+
+def home(request):
+    return JsonResponse("status": "Backend is running", "message": "Welcome to the Chess App API"})
+
 
 urlpatterns = [
+    path('', home),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
