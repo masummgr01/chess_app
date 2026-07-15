@@ -8,20 +8,26 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy requirements from the inner folder
+# Copy requirements and install
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy everything from the backend root
+# Copy the rest of the application code
 COPY . .
+
+# Ensure start.sh is executable
+RUN chmod +x start.sh
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-
-# Render sets the PORT environment variable, defaulting to 10000
 ENV PORT=10000
+
+# Collect static files (required for WhiteNoise manifest storage)
+# We set a dummy SECRET_KEY for the collection process if one isn't provided
+RUN SECRET_KEY=dummy-key-for-collectstatic python manage.py collectstatic --no-input
+
 EXPOSE 10000
 
-# Start the server using gunicorn
-CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:10000"]
+# Use the start script to run migrations and start the server
+CMD ["./start.sh"]
