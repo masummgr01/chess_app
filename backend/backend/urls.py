@@ -1,4 +1,3 @@
-
 """
 URL configuration for backend project.
 
@@ -22,7 +21,7 @@ from api import views
 from django.http import JsonResponse
 
 def home(request):
-    return JsonResponse("status": "Backend is running", "message": "Welcome to the Chess App API"})
+    return JsonResponse({"status": "Backend is running", "message": "Welcome to the Chess App API"})
 
 
 urlpatterns = [
